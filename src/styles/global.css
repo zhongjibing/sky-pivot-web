@@ -1,0 +1,73 @@
+:root {
+  --sidebar-width: 220px;
+  --topbar-height: 60px;
+  --primary-color: #409eff;
+  --success-color: #67c23a;
+  --warning-color: #e6a23c;
+  --danger-color: #f56c6c;
+  --info-color: #909399;
+  --bg-color: #f5f7fa;
+  --sidebar-bg: #1d1e2c;
+  --sidebar-text: #a3a6b4;
+  --sidebar-active: #409eff;
+  --border-color: #e4e7ed;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  min-width: 1366px;
+  min-height: 768px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: #303133;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.page-container {
+  padding: 24px;
+  height: 100%;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1d1e2c;
+}
+
+.card-container {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.health-weak { color: #f56c6c; }
+.health-fair { color: #e6a23c; }
+.health-strong { color: #409eff; }
+.health-very-strong { color: #67c23a; }
+
+.bg-weak { background-color: #f56c6c; }
+.bg-fair { background-color: #e6a23c; }
+.bg-strong { background-color: #409eff; }
+.bg-very-strong { background-color: #67c23a; }
