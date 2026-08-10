@@ -177,3 +177,19 @@ export async function encryptVaultItemsBatch(
 ): Promise<EncryptedVaultItem[]> {
   return Promise.all(items.map((item) => encryptVaultItem(item, dek)))
 }
+
+// --- Global DEK reference ---
+
+let _dek: CryptoKey | null = null
+
+export function setDek(key: CryptoKey): void {
+  _dek = key
+}
+
+export function getDek(): CryptoKey | null {
+  return _dek
+}
+
+export function clearDek(): void {
+  _dek = null
+}
