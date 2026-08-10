@@ -11,6 +11,24 @@ export interface SyncConflict {
   field: string
 }
 
-export function resolveSyncConflict(_local: Uint8Array, _remote: Uint8Array): Uint8Array {
-  throw new Error('Not implemented — Phase 2.1.3')
+/**
+ * Resolve field-level sync conflict using Lamport clock version.
+ *
+ * The higher sync_version wins (last-writer-wins per field).
+ * If versions are equal, the local value is preserved.
+ *
+ * @param local     Locally stored encrypted field value
+ * @param remote    Remotely received encrypted field value
+ * @param conflict  Version info for the conflicting field
+ * @returns The resolved encrypted field value
+ */
+export function resolveSyncConflict(
+  local: Uint8Array,
+  remote: Uint8Array,
+  conflict: SyncConflict,
+): Uint8Array {
+  if (conflict.remoteVersion > conflict.localVersion) {
+    return remote
+  }
+  return local
 }
