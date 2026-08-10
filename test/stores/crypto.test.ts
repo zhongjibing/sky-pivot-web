@@ -5,6 +5,7 @@ import { setDek, clearDek, getDek, encryptDEK, decryptDEK } from '@/crypto/vault
 import { clearRKCacheKey } from '@/crypto/rk-cache'
 import { clearSearchIndexKey } from '@/crypto/search'
 import { clearSecureMemory, trackedSecureBufferCount } from '@/crypto/memory'
+import { getVaultDek } from '@/api/auth'
 
 vi.mock('@/api/auth', () => ({
   getVaultDek: vi.fn(),
@@ -189,6 +190,55 @@ describe('useCryptoStore', () => {
       const store = useCryptoStore()
       store.setUnlocked(false)
       expect(localStorage.getItem('sky-pivot-locked')).toBe('1')
+    })
+  })
+
+  describe('verifyPassword()', () => {
+    it('returns true for correct password', async () => {
+      const mockUrk = {} as CryptoKey
+      const mockDek = {} as CryptoKey
+      const { deriveURK } = await import('@/crypto/urk')
+      const { decryptDEK } = await import('@/crypto/vault')
+
+      vi.mocked(deriveURK).mockResolvedValue(mockUrk)
+      vi.mocked(decryptDEK).mockResolvedValue(mockDek)
+      vi.mocked(getVaultDek).mockResolvedValue({
+        salt: btoa('mock-salt-123456789012'),
+        encryptedDek: btoa('mock-encrypted-dek-data'),
+      } as any)
+
+      const originalExportKey = crypto.subtle.exportKey
+      crypto.subtle.exportKey = vi.fn().mockResolvedValue(new ArrayBuffer(8)) as any
+
+      const store = useCryptoStore()
+      const result = await store.verifyPassword('correct-password')
+      expect(result).toBe(true)
+
+      crypto.subtle.exportKey = originalExportKey
+    })
+
+    it('returns false for wrong password', async () => {
+      const { deriveURK } = await import('@/crypto/urk')
+      const { decryptDEK } = await import('@/crypto/vault')
+
+      vi.mocked(deriveURK).mockResolvedValue({} as CryptoKey)
+      vi.mocked(decryptDEK).mockRejectedValue(new Error('decryption failed'))
+      vi.mocked(getVaultDek).mockResolvedValue({
+        salt: btoa('mock-salt-123456789012'),
+        encryptedDek: btoa('mock-encrypted-dek-data'),
+      } as any)
+
+      const store = useCryptoStore()
+      const result = await store.verifyPassword('wrong-password')
+      expect(result).toBe(false)
+    })
+
+    it('returns false when server returns no data', async () => {
+      vi.mocked(getVaultDek).mockResolvedValue(null as any)
+
+      const store = useCryptoStore()
+      const result = await store.verifyPassword('any-password')
+      expect(result).toBe(false)
     })
   })
 })

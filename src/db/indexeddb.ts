@@ -120,3 +120,14 @@ export async function deleteDatabase(name: string): Promise<void> {
     req.onerror = () => reject(req.error)
   })
 }
+
+export async function clearAllDatabases(): Promise<void> {
+  const dbNames = Object.keys(DB_VERSIONS)
+  for (const name of dbNames) {
+    try {
+      await deleteDatabase(name)
+    } catch {
+      // ignore individual database deletion errors
+    }
+  }
+}

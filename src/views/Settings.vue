@@ -120,13 +120,16 @@ import { changeMasterPassword } from '@/api/auth'
 import { checkStrength } from '@/api/utils'
 import { getDeletePreview, deleteAccount } from '@/api/account'
 import { useAuthStore } from '@/stores/auth'
+import { useCryptoStore } from '@/stores/crypto'
 import { useSyncStore } from '@/stores/sync'
+import { clearAllDatabases } from '@/db/indexeddb'
 import { ElMessage } from 'element-plus'
 import MasterPasswordDialog from '@/components/MasterPasswordDialog.vue'
 import type { FormInstance } from 'element-plus'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const cryptoStore = useCryptoStore()
 const syncStore = useSyncStore()
 
 // Change Password
@@ -251,6 +254,10 @@ async function onMasterPasswordConfirmed(_masterPassword: string) {
     ElMessage.success('Account deleted successfully')
     deleteDialogVisible.value = false
     syncStore.stopPolling()
+    cryptoStore.destroy()
+    await clearAllDatabases()
+    localStorage.clear()
+    sessionStorage.clear()
     authStore.logout()
   } catch {
     // error handled by interceptor

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getDb, putItem, getItem, deleteItem } from '@/db/indexeddb'
+import { getDb, putItem, getItem, deleteItem, clearAllDatabases } from '@/db/indexeddb'
 
 describe('IndexedDB smoke', () => {
   it('open, put, get, delete', async () => {
@@ -19,5 +19,11 @@ describe('IndexedDB smoke', () => {
     expect(removed).toBeUndefined()
 
     db.close()
+  })
+})
+
+describe('clearAllDatabases', () => {
+  it('clearAllDatabases is callable', () => {
+    expect(() => clearAllDatabases()).toBeDefined()
   })
 })
