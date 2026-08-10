@@ -86,10 +86,12 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
-  const token = localStorage.getItem('token')
-  if (to.meta.requiresAuth !== false && !token) {
+  const at = localStorage.getItem('at')
+  const atExpires = localStorage.getItem('atExpiresAt')
+  const hasValidAt = at && atExpires && Date.now() < new Date(atExpires).getTime()
+  if (to.meta.requiresAuth !== false && !hasValidAt) {
     next('/login')
-  } else if (to.path === '/login' && token) {
+  } else if (to.path === '/login' && hasValidAt) {
     next('/')
   } else {
     next()

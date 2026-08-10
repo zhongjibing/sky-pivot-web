@@ -112,3 +112,13 @@ export async function opaqueLoginFinish(req: OpaqueLoginFinishRequest): Promise<
 export async function tokenExchange(req: TokenExchangeRequest): Promise<TokenExchangeResponse> {
   return post('/api/auth/opaque/token-exchange', req)
 }
+
+export interface VaultDekResponse {
+  salt: string
+  encryptedDek: string
+  syncVersion: number
+}
+
+export async function getVaultDek(): Promise<VaultDekResponse> {
+  return get('/api/vault/dek')
+}
