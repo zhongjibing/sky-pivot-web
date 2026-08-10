@@ -84,6 +84,29 @@ export const useCryptoStore = defineStore('crypto', () => {
     }
   }
 
+  async function verifyPassword(masterPassword: string): Promise<boolean> {
+    try {
+      const dekResp = await getVaultDek()
+      if (!dekResp || !dekResp.salt) return false
+
+      const salt = Uint8Array.from(atob(dekResp.salt), c => c.charCodeAt(0))
+      const urk = await deriveURK(masterPassword, salt)
+
+      const encryptedDekBytes = Uint8Array.from(
+        atob(dekResp.encryptedDek),
+        c => c.charCodeAt(0),
+      )
+      const dek = await decryptDEK(encryptedDekBytes.buffer, urk)
+
+      const urkRaw = await crypto.subtle.exportKey('raw', urk)
+      memzero(new Uint8Array(urkRaw))
+
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async function unlock(masterPassword: string): Promise<void> {
     unlockError.value = ''
     unlockLoading.value = true
@@ -159,6 +182,7 @@ export const useCryptoStore = defineStore('crypto', () => {
     lock,
     destroy,
     unlock,
+    verifyPassword,
     isPersistedLocked,
   }
 })

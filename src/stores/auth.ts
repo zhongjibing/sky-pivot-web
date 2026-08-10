@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { CryptoKey } from '@/crypto'
+import { useCryptoStore } from '@/stores/crypto'
 import router from '@/router'
 
 /**
@@ -97,6 +98,11 @@ export const useAuthStore = defineStore('auth', () => {
     router.push('/login')
   }
 
+  async function verifyMasterPwd(masterPassword: string): Promise<boolean> {
+    const cryptoStore = useCryptoStore()
+    return cryptoStore.verifyPassword(masterPassword)
+  }
+
   return {
     sessionToken,
     accessToken,
@@ -115,5 +121,6 @@ export const useAuthStore = defineStore('auth', () => {
     loadStoredState,
     clearTokens,
     logout,
+    verifyMasterPwd,
   }
 })
