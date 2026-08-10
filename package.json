@@ -13,9 +13,9 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "2.3.2",
-    "@noble/curves": "^2.3.0",
-    "@noble/hashes": "^2.3.0",
-    "@scure/bip39": "^2.3.0",
+    "@noble/curves": "2.3.0",
+    "@noble/hashes": "2.3.0",
+    "@scure/bip39": "2.3.0",
     "axios": "1.19.0",
     "element-plus": "2.14.4",
     "pinia": "4.0.2",
