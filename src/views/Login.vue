@@ -44,9 +44,11 @@ import { useAuthStore } from '@/stores/auth'
 import { useCryptoStore } from '@/stores/crypto'
 import { opaqueLoginStart, opaqueLoginFinish, credentialIdentifier } from '@/crypto/opaque'
 import { deriveURK } from '@/crypto/urk'
-import { decryptDEK } from '@/crypto/vault'
+import { decryptDEK, setDek } from '@/crypto/vault'
 import { createAccessTokenPayload, signAccessToken } from '@/crypto/at-signer'
 import { decryptPrivateKey } from '@/crypto/device'
+import { initRKCache } from '@/crypto/rk-cache'
+import { initSearchIndex } from '@/crypto/search'
 import { getItem } from '@/db/indexeddb'
 import { opaqueLoginStart as apiLoginStart, opaqueLoginFinish as apiLoginFinish, tokenExchange, getVaultDek } from '@/api/auth'
 import { pullSync } from '@/api/sync'
@@ -159,9 +161,15 @@ async function handleLogin() {
 
     const encryptedDekBytes = Uint8Array.from(atob(dekResp.encryptedDek), c => c.charCodeAt(0))
     const dek = await decryptDEK(encryptedDekBytes.buffer, urkFromSalt)
+    setDek(dek)
     cryptoStore.setDekReady(true)
 
     loginStatusText.value = 'Syncing vault items...'
+
+    const urkRawForDerivedKeys = await crypto.subtle.exportKey('raw', urkFromSalt)
+    await initRKCache(urkRawForDerivedKeys)
+    await initSearchIndex(urkRawForDerivedKeys)
+    memzero(new Uint8Array(urkRawForDerivedKeys))
 
     const syncResp = await pullSync(0)
     const encryptedItems = (syncResp as any).changes || []

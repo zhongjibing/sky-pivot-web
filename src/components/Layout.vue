@@ -1,5 +1,5 @@
 <template>
-  <div class="layout">
+  <div class="layout" v-if="cryptoStore.isUnlocked">
     <aside class="sidebar">
       <div class="sidebar-logo">
         <el-icon :size="28" color="#409eff"><Lock /></el-icon>
@@ -69,13 +69,17 @@
       </main>
     </div>
   </div>
+  <LockScreen v-else />
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useCryptoStore } from '@/stores/crypto'
 import { useSyncStore } from '@/stores/sync'
+import { useIdleDetector } from '@/composables/useIdleDetector'
+import LockScreen from '@/views/LockScreen.vue'
 import {
   Lock, Key, Delete, DataAnalysis, Setting, Monitor, List,
   User, ArrowDown, InfoFilled, SwitchButton,
@@ -84,6 +88,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const cryptoStore = useCryptoStore()
 const syncStore = useSyncStore()
 
 const activeMenu = computed(() => {
@@ -92,11 +97,29 @@ const activeMenu = computed(() => {
   return path
 })
 
-syncStore.startPolling()
+const { start: startIdleDetect, stop: stopIdleDetect } = useIdleDetector(
+  cryptoStore.idleTimeout,
+  () => {
+    if (cryptoStore.isUnlocked) {
+      cryptoStore.lock()
+    }
+  },
+)
+
+onMounted(() => {
+  syncStore.startPolling()
+  startIdleDetect()
+})
+
+onUnmounted(() => {
+  stopIdleDetect()
+})
 
 function handleCommand(command: string) {
   if (command === 'logout') {
     syncStore.stopPolling()
+    stopIdleDetect()
+    cryptoStore.destroy()
     authStore.logout()
   } else if (command === 'about') {
     router.push('/about')
