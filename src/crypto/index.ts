@@ -1,4 +1,5 @@
 export * from './memory'
+export * from './urk'
 export * from './opaque'
 export * from './vault'
 export * from './device'

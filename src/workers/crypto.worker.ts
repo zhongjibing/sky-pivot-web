@@ -19,13 +19,18 @@ export interface WorkerResponse {
   error?: string
 }
 
+export interface DeriveURKPayload {
+  password: string
+  salt: ArrayBuffer
+}
+
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const { id, op, payload } = e.data
   try {
     let result: unknown
     switch (op) {
       case 'deriveURK':
-        result = await handleDeriveURK(payload)
+        result = await handleDeriveURK(payload as DeriveURKPayload)
         break
       case 'argon2id':
         result = await handleArgon2id(payload)
@@ -39,15 +44,41 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       default:
         throw new Error(`Unknown op: ${op}`)
     }
-    self.postMessage({ id, result } satisfies WorkerResponse)
+    const response: WorkerResponse = { id, result }
+    self.postMessage(response)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    self.postMessage({ id, error: message } satisfies WorkerResponse)
+    const response: WorkerResponse = { id, error: message }
+    self.postMessage(response)
   }
 }
 
-async function handleDeriveURK(_payload: unknown): Promise<unknown> {
-  throw new Error('Not implemented — Phase 2.1.2')
+async function handleDeriveURK(payload: DeriveURKPayload): Promise<ArrayBuffer> {
+  const { password, salt } = payload
+  const passwordData = new TextEncoder().encode(password)
+
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    passwordData,
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  )
+
+  passwordData.fill(0)
+
+  const rawBits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt,
+      iterations: 600_000,
+      hash: 'SHA-512',
+    },
+    keyMaterial,
+    256,
+  )
+
+  return rawBits
 }
 
 async function handleArgon2id(_payload: unknown): Promise<unknown> {
