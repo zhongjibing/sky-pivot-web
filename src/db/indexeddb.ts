@@ -10,7 +10,7 @@
 
 const DB_VERSIONS: Record<string, number> = {
   'sky-pivot-vault': 1,
-  'sky-pivot-search': 1,
+  'sky-pivot-search': 2,
   'sky-pivot-rk': 1,
   'sky-pivot-queue': 1,
 }
@@ -36,6 +36,9 @@ function openDatabase(name: string): Promise<IDBDatabase> {
             const store = db.createObjectStore('tokens', { keyPath: 'id', autoIncrement: true })
             store.createIndex('token', 'token', { unique: false })
             store.createIndex('itemId', 'itemId', { unique: false })
+          }
+          if (!db.objectStoreNames.contains('notesTokens')) {
+            db.createObjectStore('notesTokens', { keyPath: 'itemId' })
           }
           break
         case 'sky-pivot-rk':
