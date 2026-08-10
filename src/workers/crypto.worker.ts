@@ -4,12 +4,14 @@
  * Offloaded operations:
  *  - PBKDF2 (600K iterations) for URK derivation
  *  - Argon2id for URK derivation (when supported)
- *  - Bulk AES-GCM encrypt/decrypt for vault items
+ *
+ * Batch encryption/decryption runs on the main thread via Promise.all
+ * (AES-GCM is fast enough that worker serialization overhead outweighs benefit).
  */
 
 export interface WorkerRequest {
   id: string
-  op: 'deriveURK' | 'argon2id' | 'encryptBatch' | 'decryptBatch'
+  op: 'deriveURK' | 'argon2id'
   payload: unknown
 }
 
@@ -34,12 +36,6 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         break
       case 'argon2id':
         result = await handleArgon2id(payload)
-        break
-      case 'encryptBatch':
-        result = await handleEncryptBatch(payload)
-        break
-      case 'decryptBatch':
-        result = await handleDecryptBatch(payload)
         break
       default:
         throw new Error(`Unknown op: ${op}`)
@@ -82,13 +78,5 @@ async function handleDeriveURK(payload: DeriveURKPayload): Promise<ArrayBuffer> 
 }
 
 async function handleArgon2id(_payload: unknown): Promise<unknown> {
-  throw new Error('Not implemented — Phase 2.1.2')
-}
-
-async function handleEncryptBatch(_payload: unknown): Promise<unknown> {
-  throw new Error('Not implemented — Phase 2.1.3')
-}
-
-async function handleDecryptBatch(_payload: unknown): Promise<unknown> {
-  throw new Error('Not implemented — Phase 2.1.3')
+  throw new Error('Argon2id not implemented — Web Crypto API does not support Argon2')
 }
