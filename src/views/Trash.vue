@@ -67,10 +67,12 @@
         <div class="detail-row">
           <span class="detail-label">Password</span>
           <div class="detail-password">
-            <span class="detail-value password-font">{{ showPassword ? detailData.password : '********' }}</span>
-            <el-button link type="primary" @click="copyPassword" v-if="showPassword">
-              <el-icon><CopyDocument /></el-icon>Copy
-            </el-button>
+            <SecurePasswordDisplay
+              v-if="detailData?.password"
+              :password="detailData.password"
+              :auto-mask-timeout="30000"
+              @copy="onPasswordCopied"
+            />
           </div>
         </div>
         <div class="detail-row">
@@ -79,12 +81,6 @@
         </div>
       </div>
     </el-dialog>
-
-    <!-- Master Password Dialog -->
-    <MasterPasswordDialog
-      v-model="masterPwdVisible"
-      @confirmed="onMasterPasswordConfirmed"
-    />
 
     <!-- Permanent Delete Confirmation -->
     <el-dialog v-model="permDeleteVisible" title="Delete Permanently" width="420px">
@@ -99,25 +95,22 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { getTrashList, getTrashDetail, restoreTrash, permanentDeleteTrash } from '@/api/trash'
+import { usePasswordsStore } from '@/stores/passwords'
 import { ElMessage } from 'element-plus'
-import { Delete, CopyDocument } from '@element-plus/icons-vue'
-import MasterPasswordDialog from '@/components/MasterPasswordDialog.vue'
+import { Delete } from '@element-plus/icons-vue'
+import SecurePasswordDisplay from '@/components/SecurePasswordDisplay.vue'
 
 interface TrashItemWithFlag extends TrashItem {
   _restoring?: boolean
 }
+
+const passwordsStore = usePasswordsStore()
 
 const loading = ref(false)
 const trashList = ref<TrashItemWithFlag[]>([])
 
 const detailVisible = ref(false)
 const detailData = ref<PasswordDetail | null>(null)
-const showPassword = ref(false)
-let passwordTimer: ReturnType<typeof setTimeout> | null = null
-
-const masterPwdVisible = ref(false)
-let pendingAction: ((masterPassword: string) => void) | null = null
 
 const permDeleteVisible = ref(false)
 const permDeleteTarget = ref<TrashItem | null>(null)
@@ -130,8 +123,7 @@ onMounted(() => {
 async function fetchTrash() {
   loading.value = true
   try {
-    const res = await getTrashList()
-    trashList.value = res.data || []
+    trashList.value = await passwordsStore.fetchTrash()
   } catch {
     trashList.value = []
   } finally {
@@ -140,59 +132,33 @@ async function fetchTrash() {
 }
 
 function openDetail(row: TrashItem) {
-  masterPwdVisible.value = true
-  pendingAction = (masterPassword: string) => {
-    fetchDetail(row.id, masterPassword)
-  }
+  fetchDetail(row.id)
 }
 
-async function onMasterPasswordConfirmed(masterPassword: string) {
-  if (pendingAction) {
-    pendingAction(masterPassword)
-    pendingAction = null
-  }
-}
-
-async function fetchDetail(id: string, masterPassword: string) {
+async function fetchDetail(id: string) {
   try {
-    const res = await getTrashDetail(id, masterPassword)
-    detailData.value = res.data
-    showPassword.value = true
-    detailVisible.value = true
-
-    if (passwordTimer) clearTimeout(passwordTimer)
-    passwordTimer = setTimeout(() => {
-      showPassword.value = false
-    }, 30000)
+    const detail = await passwordsStore.getDetail(id)
+    if (detail) {
+      detailData.value = detail
+      detailVisible.value = true
+    }
   } catch {
     ElMessage.error('Failed to load detail')
   }
 }
 
 function clearDetail() {
-  showPassword.value = false
   detailData.value = null
-  if (passwordTimer) {
-    clearTimeout(passwordTimer)
-    passwordTimer = null
-  }
 }
 
-async function copyPassword() {
-  if (detailData.value) {
-    try {
-      await navigator.clipboard.writeText(detailData.value.password)
-      ElMessage.success('Password copied, keep it safe')
-    } catch {
-      ElMessage.error('Failed to copy')
-    }
-  }
+function onPasswordCopied(_password: string) {
+  ElMessage.success('Password copied, clipboard will be cleared in 30 seconds')
 }
 
 async function handleRestore(row: TrashItemWithFlag) {
   row._restoring = true
   try {
-    await restoreTrash(row.id)
+    await passwordsStore.restore(row.id)
     ElMessage.success('Password restored successfully')
     fetchTrash()
   } catch {
@@ -211,7 +177,7 @@ async function confirmPermanentDelete() {
   if (!permDeleteTarget.value) return
   permDeleteLoading.value = true
   try {
-    await permanentDeleteTrash(permDeleteTarget.value.id)
+    await passwordsStore.permanentDelete(permDeleteTarget.value.id)
     ElMessage.success('Password permanently deleted')
     permDeleteVisible.value = false
     fetchTrash()

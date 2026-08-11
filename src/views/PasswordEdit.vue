@@ -72,12 +72,6 @@
       v-model="generatorVisible"
       @select="onPasswordSelected"
     />
-
-    <MasterPasswordDialog
-      v-model="masterPwdVisible"
-      description="Master password is required to load the password detail for editing."
-      @confirmed="onMasterPasswordConfirmed"
-    />
   </div>
 </template>
 
@@ -85,12 +79,10 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { usePasswordsStore } from '@/stores/passwords'
-import { getPasswordDetail } from '@/api/passwords'
-import { checkStrength } from '@/api/utils'
+import { checkStrength } from '@/crypto/password-gen'
 import { ElMessage } from 'element-plus'
 import { MagicStick } from '@element-plus/icons-vue'
 import PasswordGenerator from '@/components/PasswordGenerator.vue'
-import MasterPasswordDialog from '@/components/MasterPasswordDialog.vue'
 import type { FormInstance } from 'element-plus'
 
 const router = useRouter()
@@ -100,7 +92,6 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const pageLoading = ref(false)
 const generatorVisible = ref(false)
-const masterPwdVisible = ref(true)
 const strengthScore = ref(0)
 const strengthLevel = ref('')
 const id = route.params.id as string
@@ -138,7 +129,7 @@ const strengthTagType = computed(() => {
   const level = strengthLevel.value.toLowerCase().replace(/[\s_-]/g, '')
   if (level === 'weak') return 'danger'
   if (level === 'fair') return 'warning'
-  if (level === 'strong') return ''
+  if (level === 'strong') return 'primary'
   if (level === 'verystrong') return 'success'
   return 'info'
 })
@@ -156,34 +147,35 @@ let strengthTimer: ReturnType<typeof setTimeout> | null = null
 watch(() => form.password, (val) => {
   if (strengthTimer) clearTimeout(strengthTimer)
   if (val) {
-    strengthTimer = setTimeout(async () => {
-      try {
-        const res = await checkStrength(val)
-        strengthScore.value = res.data.score
-        strengthLevel.value = res.data.level
-      } catch {
-        // silent
-      }
+    strengthTimer = setTimeout(() => {
+      const result = checkStrength(val)
+      strengthScore.value = result.score
+      strengthLevel.value = result.level
     }, 300)
   }
 })
 
-async function onMasterPasswordConfirmed(masterPassword: string) {
+onMounted(async () => {
   pageLoading.value = true
   try {
-    const res = await getPasswordDetail(id, masterPassword)
-    form.title = res.data.title
-    form.url = res.data.url || ''
-    form.account = res.data.account
-    form.password = res.data.password
-    form.notes = res.data.notes || ''
+    const detail = await passwordsStore.getDetail(id)
+    if (detail) {
+      form.title = detail.title
+      form.url = detail.url || ''
+      form.account = detail.account
+      form.password = detail.password
+      form.notes = detail.notes || ''
+    } else {
+      ElMessage.error('Failed to load password detail')
+      router.back()
+    }
   } catch {
     ElMessage.error('Failed to load password detail')
     router.back()
   } finally {
     pageLoading.value = false
   }
-}
+})
 
 function onPasswordSelected(password: string) {
   form.password = password
@@ -203,7 +195,6 @@ async function handleSubmit() {
           password: form.password,
           notes: form.notes || undefined,
         },
-        '' // masterPassword already in xToken header
       )
       router.push('/')
     } catch {

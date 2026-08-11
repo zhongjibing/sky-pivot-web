@@ -16,15 +16,15 @@ const normalizedLevel = computed(() => {
   return l
 })
 
-const tagType = computed(() => {
-  switch (normalizedLevel.value) {
-    case 'weak': return 'danger'
-    case 'fair': return 'warning'
-    case 'strong': return ''
-    case 'verystrong': return 'success'
-    default: return 'info'
-  }
-})
+  const tagType = computed(() => {
+    switch (normalizedLevel.value) {
+      case 'weak': return 'danger'
+      case 'fair': return 'warning'
+      case 'strong': return 'primary'
+      case 'verystrong': return 'success'
+      default: return 'info'
+    }
+  })
 
 const label = computed(() => {
   switch (normalizedLevel.value) {

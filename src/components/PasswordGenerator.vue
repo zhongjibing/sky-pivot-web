@@ -60,7 +60,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { generatePassword, checkStrength } from '@/api/utils'
+import { generatePassword, checkStrength } from '@/crypto/password-gen'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 
@@ -88,7 +88,7 @@ const strengthTagType = computed(() => {
   const level = strengthLevel.value.toLowerCase()
   if (level === 'weak') return 'danger'
   if (level === 'fair') return 'warning'
-  if (level === 'strong') return ''
+  if (level === 'strong') return 'primary'
   if (level === 'very_strong' || level === 'verystrong' || level === 'very strong') return 'success'
   return 'info'
 })
@@ -113,33 +113,28 @@ watch(visible, (val) => {
   emit('update:modelValue', val)
 })
 
-watch(generatedPassword, async (val) => {
+watch(generatedPassword, (val) => {
   if (val) {
-    try {
-      const res = await checkStrength(val)
-      strengthScore.value = res.data.score
-      strengthLevel.value = res.data.level
-    } catch {
-      // silent
-    }
+    const result = checkStrength(val)
+    strengthScore.value = result.score
+    strengthLevel.value = result.level
   }
 })
 
-async function handleGenerate() {
+function handleGenerate() {
   if (!uppercase.value && !lowercase.value && !digits.value && !special.value) {
     ElMessage.warning('At least one character type must be selected')
     return
   }
   generating.value = true
   try {
-    const res = await generatePassword({
+    generatedPassword.value = generatePassword({
       length: length.value,
       uppercase: uppercase.value,
       lowercase: lowercase.value,
       digits: digits.value,
       special: special.value,
     })
-    generatedPassword.value = res.data.password
   } catch {
     ElMessage.error('Failed to generate password')
   } finally {

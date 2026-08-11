@@ -140,12 +140,6 @@
       </div>
     </el-dialog>
 
-    <!-- Master Password Dialog for viewing detail -->
-    <MasterPasswordDialog
-      v-model="masterPwdVisible"
-      @confirmed="onMasterPasswordConfirmed"
-    />
-
     <!-- Delete Confirmation -->
     <el-dialog v-model="deleteVisible" title="Delete Password" width="400px">
       <p>Are you sure you want to delete <strong>{{ deleteTarget?.title }}</strong>? It will be moved to trash.</p>
@@ -161,11 +155,9 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePasswordsStore } from '@/stores/passwords'
-import { getPasswordDetail } from '@/api/passwords'
 import { ElMessage } from 'element-plus'
 import { Plus, Search, Key } from '@element-plus/icons-vue'
 import HealthBadge from '@/components/HealthBadge.vue'
-import MasterPasswordDialog from '@/components/MasterPasswordDialog.vue'
 import SecurePasswordDisplay from '@/components/SecurePasswordDisplay.vue'
 
 const router = useRouter()
@@ -177,9 +169,6 @@ const currentPage = ref(1)
 
 const detailVisible = ref(false)
 const detailData = ref<PasswordDetail | null>(null)
-
-const masterPwdVisible = ref(false)
-let pendingAction: ((masterPassword: string) => void) | null = null
 
 const deleteVisible = ref(false)
 const deleteTarget = ref<PasswordItem | null>(null)
@@ -208,29 +197,21 @@ function handlePageChange(page: number) {
   passwordsStore.setPage(page - 1)
 }
 
-function handleRowClick(row: PasswordItem) {
-  openDetail(row)
+function handleRowClick(row: any) {
+  openDetail(row as PasswordItem)
 }
 
-function openDetail(_row: PasswordItem) {
-  masterPwdVisible.value = true
-  pendingAction = (masterPassword: string) => {
-    fetchDetail(_row.id, masterPassword)
-  }
+function openDetail(row: PasswordItem) {
+  fetchDetail(row.id)
 }
 
-async function onMasterPasswordConfirmed(masterPassword: string) {
-  if (pendingAction) {
-    pendingAction(masterPassword)
-    pendingAction = null
-  }
-}
-
-async function fetchDetail(id: string, masterPassword: string) {
+async function fetchDetail(id: string) {
   try {
-    const res = await getPasswordDetail(id, masterPassword)
-    detailData.value = res.data
-    detailVisible.value = true
+    const detail = await passwordsStore.getDetail(id)
+    if (detail) {
+      detailData.value = detail
+      detailVisible.value = true
+    }
   } catch {
     ElMessage.error('Failed to load detail')
   }

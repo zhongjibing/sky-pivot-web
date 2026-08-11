@@ -117,7 +117,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { changeMasterPassword } from '@/api/auth'
-import { checkStrength } from '@/api/utils'
+import { checkStrength } from '@/crypto/password-gen'
 import { getDeletePreview, deleteAccount } from '@/api/account'
 import { useAuthStore } from '@/stores/auth'
 import { useCryptoStore } from '@/stores/crypto'
@@ -189,14 +189,10 @@ let strengthTimer: ReturnType<typeof setTimeout> | null = null
 watch(() => changePwdForm.newPassword, (val) => {
   if (strengthTimer) clearTimeout(strengthTimer)
   if (val) {
-    strengthTimer = setTimeout(async () => {
-      try {
-        const res = await checkStrength(val)
-        strengthScore.value = res.data.score
-        strengthLevel.value = res.data.level
-      } catch {
-        // silent
-      }
+    strengthTimer = setTimeout(() => {
+      const result = checkStrength(val)
+      strengthScore.value = result.score
+      strengthLevel.value = result.level
     }, 300)
   }
 })

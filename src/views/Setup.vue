@@ -108,7 +108,7 @@
 import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { setupMasterPassword } from '@/api/auth'
-import { checkStrength } from '@/api/utils'
+import { checkStrength } from '@/crypto/password-gen'
 import { ElMessage } from 'element-plus'
 import { WarningFilled, CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
@@ -176,15 +176,11 @@ const strengthLabel = computed(() => {
 let strengthTimer: ReturnType<typeof setTimeout> | null = null
 function debouncedCheckStrength() {
   if (strengthTimer) clearTimeout(strengthTimer)
-  strengthTimer = setTimeout(async () => {
+  strengthTimer = setTimeout(() => {
     if (form.masterPassword) {
-      try {
-        const res = await checkStrength(form.masterPassword)
-        strengthScore.value = res.data.score
-        strengthLevel.value = res.data.level
-      } catch {
-        // silent
-      }
+      const result = checkStrength(form.masterPassword)
+      strengthScore.value = result.score
+      strengthLevel.value = result.level
     }
   }, 300)
 }

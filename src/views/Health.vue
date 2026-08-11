@@ -90,10 +90,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getHealthSummary } from '@/api/health'
+import { usePasswordsStore } from '@/stores/passwords'
 import { WarningFilled, InfoFilled, Check, CircleCheckFilled } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const passwordsStore = usePasswordsStore()
 const loading = ref(false)
 const summary = ref({ weak: 0, fair: 0, strong: 0, veryStrong: 0 })
 
@@ -143,8 +144,7 @@ const legendItems = computed(() => {
 onMounted(async () => {
   loading.value = true
   try {
-    const res = await getHealthSummary()
-    summary.value = res.data
+    summary.value = await passwordsStore.getHealthSummary()
   } catch {
     // error handled by interceptor
   } finally {
