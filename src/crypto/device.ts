@@ -14,6 +14,22 @@
 
 import { memzero } from './memory'
 
+const enc = new TextEncoder()
+const dec = new TextDecoder()
+
+export function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+export function hexToBytes(hex: string): Uint8Array {
+  if (hex.length % 2 !== 0) throw new Error('Invalid hex string')
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16)
+  }
+  return bytes
+}
+
 export interface DeviceKeyPair {
   publicKey: Uint8Array
   privateKey: CryptoKey
@@ -136,3 +152,169 @@ export async function importPrivateKey(raw: Uint8Array): Promise<CryptoKey> {
     ['sign'],
   )
 }
+
+export interface X25519KeyPair {
+  publicKey: Uint8Array
+  privateKey: CryptoKey
+}
+
+export async function generateTempX25519KeyPair(): Promise<X25519KeyPair> {
+  const pair = (await crypto.subtle.generateKey(
+    { name: 'X25519' },
+    false,
+    ['deriveBits'],
+  )) as CryptoKeyPair
+
+  const publicKeyRaw = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey))
+
+  return {
+    publicKey: publicKeyRaw,
+    privateKey: pair.privateKey,
+  }
+}
+
+export async function exportX25519PublicKey(key: CryptoKey): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.exportKey('raw', key))
+}
+
+export async function importX25519PublicKey(raw: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    raw,
+    { name: 'X25519' },
+    true,
+    [],
+  )
+}
+
+export async function computeFingerprint(publicKeyBase64: string): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', enc.encode(publicKeyBase64))
+  return bytesToHex(new Uint8Array(hash)).substring(0, 8)
+}
+
+export async function ecdhEncryptDEK(
+  dekRaw: Uint8Array,
+  receiverPublicKeyRaw: Uint8Array,
+  senderPublicKeyRaw: Uint8Array,
+  senderPrivateKey: CryptoKey,
+): Promise<{ encryptedDek: string; senderPublicKey: string; iv: string }> {
+  const receiverPubKey = await importX25519PublicKey(receiverPublicKeyRaw)
+
+  const sharedSecret = await crypto.subtle.deriveBits(
+    { name: 'X25519', public: receiverPubKey },
+    senderPrivateKey,
+    256,
+  )
+
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const aesKey = await deriveAesKeyFromSharedSecret(sharedSecret)
+
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    aesKey,
+    dekRaw,
+  ))
+
+  return {
+    encryptedDek: bytesToHex(ciphertext),
+    senderPublicKey: bytesToHex(senderPublicKeyRaw),
+    iv: bytesToHex(iv),
+  }
+}
+
+export async function ecdhDecryptDEK(
+  encryptedDek: string,
+  senderPublicKeyHex: string,
+  ivHex: string,
+  receiverPrivateKey: CryptoKey,
+): Promise<Uint8Array> {
+  const senderPkBytes = hexToBytes(senderPublicKeyHex)
+  const senderPublicKey = await importX25519PublicKey(senderPkBytes)
+
+  const sharedSecret = await crypto.subtle.deriveBits(
+    { name: 'X25519', public: senderPublicKey },
+    receiverPrivateKey,
+    256,
+  )
+
+  const aesKey = await deriveAesKeyFromSharedSecret(sharedSecret)
+
+  const iv = hexToBytes(ivHex)
+  const ciphertext = hexToBytes(encryptedDek)
+
+  const plaintext = new Uint8Array(await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    aesKey,
+    ciphertext,
+  ))
+
+  return plaintext
+}
+
+export async function ecdhEncryptForResponse(
+  plaintext: Uint8Array,
+  peerPublicKeyRaw: Uint8Array,
+  myPrivateKey: CryptoKey,
+): Promise<{ ciphertext: string; iv: string }> {
+  const peerPublicKey = await importX25519PublicKey(peerPublicKeyRaw)
+
+  const sharedSecret = await crypto.subtle.deriveBits(
+    { name: 'X25519', public: peerPublicKey },
+    myPrivateKey,
+    256,
+  )
+
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const aesKey = await deriveAesKeyFromSharedSecret(sharedSecret)
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    aesKey,
+    plaintext,
+  )
+
+  return {
+    ciphertext: bytesToHex(new Uint8Array(ciphertext)),
+    iv: bytesToHex(iv),
+  }
+}
+
+export async function ecdhDecryptFromResponse(
+  ciphertextHex: string,
+  ivHex: string,
+  peerPublicKeyRaw: Uint8Array,
+  myPrivateKey: CryptoKey,
+): Promise<Uint8Array> {
+  const peerPublicKey = await importX25519PublicKey(peerPublicKeyRaw)
+
+  const sharedSecret = await crypto.subtle.deriveBits(
+    { name: 'X25519', public: peerPublicKey },
+    myPrivateKey,
+    256,
+  )
+
+  const aesKey = await deriveAesKeyFromSharedSecret(sharedSecret)
+
+  const iv = hexToBytes(ivHex)
+  const ciphertext = hexToBytes(ciphertextHex)
+
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    aesKey,
+    ciphertext,
+  )
+
+  return new Uint8Array(plaintext)
+}
+
+async function deriveAesKeyFromSharedSecret(sharedSecret: ArrayBuffer): Promise<CryptoKey> {
+  const hash = await crypto.subtle.digest('SHA-256', sharedSecret)
+  return crypto.subtle.importKey(
+    'raw',
+    hash.slice(0, 32),
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  )
+}
+
