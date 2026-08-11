@@ -121,10 +121,12 @@
         <div class="detail-row">
           <span class="detail-label">Password</span>
           <div class="detail-password">
-            <span class="detail-value password-font">{{ showPassword ? detailData.password : '********' }}</span>
-            <el-button link type="primary" @click="copyPassword" v-if="showPassword">
-              <el-icon><CopyDocument /></el-icon>Copy
-            </el-button>
+            <SecurePasswordDisplay
+              v-if="detailData?.password"
+              :password="detailData.password"
+              :auto-mask-timeout="30000"
+              @copy="onPasswordCopied"
+            />
           </div>
         </div>
         <div class="detail-row">
@@ -161,9 +163,10 @@ import { useRouter } from 'vue-router'
 import { usePasswordsStore } from '@/stores/passwords'
 import { getPasswordDetail } from '@/api/passwords'
 import { ElMessage } from 'element-plus'
-import { Plus, Search, Key, CopyDocument } from '@element-plus/icons-vue'
+import { Plus, Search, Key } from '@element-plus/icons-vue'
 import HealthBadge from '@/components/HealthBadge.vue'
 import MasterPasswordDialog from '@/components/MasterPasswordDialog.vue'
+import SecurePasswordDisplay from '@/components/SecurePasswordDisplay.vue'
 
 const router = useRouter()
 const passwordsStore = usePasswordsStore()
@@ -174,8 +177,6 @@ const currentPage = ref(1)
 
 const detailVisible = ref(false)
 const detailData = ref<PasswordDetail | null>(null)
-const showPassword = ref(false)
-let passwordTimer: ReturnType<typeof setTimeout> | null = null
 
 const masterPwdVisible = ref(false)
 let pendingAction: ((masterPassword: string) => void) | null = null
@@ -229,36 +230,18 @@ async function fetchDetail(id: string, masterPassword: string) {
   try {
     const res = await getPasswordDetail(id, masterPassword)
     detailData.value = res.data
-    showPassword.value = true
     detailVisible.value = true
-
-    if (passwordTimer) clearTimeout(passwordTimer)
-    passwordTimer = setTimeout(() => {
-      showPassword.value = false
-    }, 30000)
   } catch {
     ElMessage.error('Failed to load detail')
   }
 }
 
 function clearDetail() {
-  showPassword.value = false
   detailData.value = null
-  if (passwordTimer) {
-    clearTimeout(passwordTimer)
-    passwordTimer = null
-  }
 }
 
-async function copyPassword() {
-  if (detailData.value) {
-    try {
-      await navigator.clipboard.writeText(detailData.value.password)
-      ElMessage.success('Password copied, keep it safe')
-    } catch {
-      ElMessage.error('Failed to copy')
-    }
-  }
+function onPasswordCopied(_password: string) {
+  ElMessage.success('Password copied, clipboard will be cleared in 30 seconds')
 }
 
 function goEdit(id: string) {
