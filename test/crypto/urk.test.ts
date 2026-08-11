@@ -4,17 +4,26 @@ import { deriveURKBits, deriveURK } from '@/crypto/urk'
 const TEST_PASSWORD = 'password'
 const TEST_SALT = new TextEncoder().encode('saltsaltsaltsalt')
 
+// Shared cross-platform vector: must match the miniapp's libsodium Argon2id
+// (m=16MB, t=2, p=1, dkLen=32). Verified identical output on both platforms.
+const VECTOR_PASSWORD = 'SkyPivot#Test@2026'
+const VECTOR_SALT = Uint8Array.from(
+  Buffer.from('a1b2c3d4e5f60718293a4b5c6d7e8f90', 'hex'),
+)
+const VECTOR_URK_HEX = '0B07B6A62DC4CA9241EEF563C866B1C246F1D13E609787073F3DDB0A202D18E8'
+
 describe('deriveURKBits', () => {
-  it('produces deterministic 32-byte output matching test vector', async () => {
-    const bits = await deriveURKBits(TEST_PASSWORD, TEST_SALT)
+  it('produces deterministic 32-byte output matching the cross-platform vector', async () => {
+    const bits = await deriveURKBits(VECTOR_PASSWORD, VECTOR_SALT)
 
     expect(bits.byteLength).toBe(32)
 
     const hex = Array.from(new Uint8Array(bits))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('')
+      .toUpperCase()
 
-    expect(hex).toBe('cec807eb10c6caf44a03aefc3d8337dbb3008c52527f04038d886f737df11f73')
+    expect(hex).toBe(VECTOR_URK_HEX)
   })
 
   it('produces identical output for same inputs', async () => {

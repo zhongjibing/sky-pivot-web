@@ -1,17 +1,18 @@
 /**
  * Web Worker for CPU-intensive cryptographic operations
  *
- * Offloaded operations:
- *  - PBKDF2 (600K iterations) for URK derivation
- *  - Argon2id for URK derivation (when supported)
+ * Offloaded operation:
+ *  - Argon2id (16MB / t=2 / p=1) for URK derivation
  *
  * Batch encryption/decryption runs on the main thread via Promise.all
  * (AES-GCM is fast enough that worker serialization overhead outweighs benefit).
  */
 
+import { argon2id } from '@noble/hashes/argon2.js'
+
 export interface WorkerRequest {
   id: string
-  op: 'deriveURK' | 'argon2id'
+  op: 'deriveURK'
   payload: unknown
 }
 
@@ -26,6 +27,11 @@ export interface DeriveURKPayload {
   salt: ArrayBuffer
 }
 
+const ARGON2_MEM_KIB = 16384 // 16 MiB
+const ARGON2_TIME = 2
+const ARGON2_PARALLELISM = 1
+const ARGON2_DKLEN = 32
+
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const { id, op, payload } = e.data
   try {
@@ -33,9 +39,6 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
     switch (op) {
       case 'deriveURK':
         result = await handleDeriveURK(payload as DeriveURKPayload)
-        break
-      case 'argon2id':
-        result = await handleArgon2id(payload)
         break
       default:
         throw new Error(`Unknown op: ${op}`)
@@ -53,30 +56,14 @@ async function handleDeriveURK(payload: DeriveURKPayload): Promise<ArrayBuffer> 
   const { password, salt } = payload
   const passwordData = new TextEncoder().encode(password)
 
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    passwordData,
-    'PBKDF2',
-    false,
-    ['deriveBits'],
-  )
+  const key = argon2id(passwordData, new Uint8Array(salt), {
+    t: ARGON2_TIME,
+    m: ARGON2_MEM_KIB,
+    p: ARGON2_PARALLELISM,
+    dkLen: ARGON2_DKLEN,
+  })
 
   passwordData.fill(0)
 
-  const rawBits = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt,
-      iterations: 600_000,
-      hash: 'SHA-512',
-    },
-    keyMaterial,
-    256,
-  )
-
-  return rawBits
-}
-
-async function handleArgon2id(_payload: unknown): Promise<unknown> {
-  throw new Error('Argon2id not implemented — Web Crypto API does not support Argon2')
+  return key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength)
 }

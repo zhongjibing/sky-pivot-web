@@ -1,8 +1,12 @@
+import { argon2id } from '@noble/hashes/argon2.js'
 import type { WorkerRequest } from '@/workers/crypto.worker'
 
-const PBKDF2_ITERATIONS = 600_000
-const PBKDF2_HASH = 'SHA-512'
-const DERIVED_KEY_BITS = 256
+// Unified URK KDF across platforms: Argon2id (m=16MB, t=2, p=1, dkLen=32)
+// Must match the miniapp's libsodium derivation to decrypt the same account.
+const ARGON2_MEM_KIB = 16384 // 16 MiB
+const ARGON2_TIME = 2
+const ARGON2_PARALLELISM = 1
+const ARGON2_DKLEN = 32
 
 const WORKER_AVAILABLE = typeof Worker !== 'undefined'
 
@@ -41,28 +45,19 @@ function sendWorkerMessage<T>(op: WorkerRequest['op'], payload: unknown): Promis
 export async function deriveURKBits(masterPassword: string, salt: Uint8Array): Promise<ArrayBuffer> {
   const passwordData = new TextEncoder().encode(masterPassword)
 
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    passwordData,
-    'PBKDF2',
-    false,
-    ['deriveBits'],
-  )
+  const rawBits = argon2id(passwordData, salt, {
+    t: ARGON2_TIME,
+    m: ARGON2_MEM_KIB,
+    p: ARGON2_PARALLELISM,
+    dkLen: ARGON2_DKLEN,
+  })
 
   passwordData.fill(0)
 
-  const rawBits = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt: salt as BufferSource,
-      iterations: PBKDF2_ITERATIONS,
-      hash: PBKDF2_HASH,
-    },
-    keyMaterial,
-    DERIVED_KEY_BITS,
+  return rawBits.buffer.slice(
+    rawBits.byteOffset,
+    rawBits.byteOffset + rawBits.byteLength,
   )
-
-  return rawBits
 }
 
 async function deriveURKRaw(masterPassword: string, salt: Uint8Array): Promise<ArrayBuffer> {
