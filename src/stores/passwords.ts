@@ -16,6 +16,7 @@ import type {
 } from '@/api/vault'
 import { decryptBlob, decryptBlobsBatch, encryptBlob, computeHealth } from '@/crypto/vault-blob'
 import type { DecryptedVaultItem } from '@/crypto/vault'
+import { buildFullIndex, indexItem, deleteSearchItem, search as searchIndex } from '@/crypto/search'
 import { ElMessage } from 'element-plus'
 
 export const usePasswordsStore = defineStore('passwords', () => {
@@ -31,6 +32,7 @@ export const usePasswordsStore = defineStore('passwords', () => {
 
   const itemVersions = new Map<string, number>()
   const itemUpdatedAts = new Map<string, string>()
+  const decryptedCache = new Map<string, DecryptedVaultItem>()
 
   function matchSearch(item: DecryptedVaultItem, query: string): boolean {
     if (!query) return true
@@ -98,12 +100,50 @@ export const usePasswordsStore = defineStore('passwords', () => {
         })),
       )
 
-      const filtered = allDecrypted.filter((item) => matchSearch(item, search.value))
-      const sorted = sortItems(filtered)
+      decryptedCache.clear()
+      for (const item of allDecrypted) {
+        decryptedCache.set(item.id, item)
+      }
 
-      total.value = sorted.length
+      buildFullIndex(allDecrypted).catch(() => {})
+
+      fetchFiltered()
+    } catch {
+      list.value = []
+      total.value = 0
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchFiltered() {
+    loading.value = true
+    try {
+      let filtered: DecryptedVaultItem[]
+
+      if (search.value && search.value.trim()) {
+        try {
+          const results = await searchIndex(search.value)
+          if (results.length > 0) {
+            const resultMap = new Map(results.map((r) => [r.itemId, r.score]))
+            filtered = [...decryptedCache.values()].filter((item) => resultMap.has(item.id))
+            filtered.sort((a, b) => (resultMap.get(b.id) || 0) - (resultMap.get(a.id) || 0))
+          } else {
+            filtered = [...decryptedCache.values()].filter((item) => matchSearch(item, search.value))
+            filtered = sortItems(filtered)
+          }
+        } catch {
+          filtered = [...decryptedCache.values()].filter((item) => matchSearch(item, search.value))
+          filtered = sortItems(filtered)
+        }
+      } else {
+        filtered = [...decryptedCache.values()]
+        filtered = sortItems(filtered)
+      }
+
+      total.value = filtered.length
       const start = page.value * size.value
-      const paged = sorted.slice(start, start + size.value)
+      const paged = filtered.slice(start, start + size.value)
 
       list.value = paged.map(toPasswordItem)
     } catch {
@@ -117,18 +157,18 @@ export const usePasswordsStore = defineStore('passwords', () => {
   function setSearch(val: string) {
     search.value = val
     page.value = 0
-    fetchList()
+    fetchFiltered()
   }
 
   function setSort(field: string, dir: string) {
     sortBy.value = field
     order.value = dir
-    fetchList()
+    fetchFiltered()
   }
 
   function setPage(p: number) {
     page.value = p
-    fetchList()
+    fetchFiltered()
   }
 
   async function create(data: { title: string; url?: string; account: string; password: string; notes?: string }) {
@@ -151,8 +191,10 @@ export const usePasswordsStore = defineStore('passwords', () => {
 
     try {
       await createVaultItem({ itemId, encryptedBlob: result.encryptedBlob })
+      decryptedCache.set(itemId, item)
+      indexItem(item).catch(() => {})
       ElMessage.success('Password created successfully')
-      fetchList()
+      fetchFiltered()
       return { id: itemId, healthScore: computeHealth(data.password).healthScore, healthLevel: computeHealth(data.password).healthLevel }
     } catch {
       ElMessage.error('Failed to create password')
@@ -217,8 +259,10 @@ export const usePasswordsStore = defineStore('passwords', () => {
 
     try {
       await updateVaultItem(id, { encryptedBlob: result.encryptedBlob, version })
+      decryptedCache.set(id, updated)
+      indexItem(updated).catch(() => {})
       ElMessage.success('Password updated successfully')
-      fetchList()
+      fetchFiltered()
     } catch {
       ElMessage.error('Failed to update password')
       throw new Error('Failed to update password')
@@ -228,8 +272,10 @@ export const usePasswordsStore = defineStore('passwords', () => {
   async function remove(id: string) {
     try {
       await softDeleteVaultItem(id)
+      decryptedCache.delete(id)
+      deleteSearchItem(id).catch(() => {})
       ElMessage.success('Password moved to trash')
-      fetchList()
+      fetchFiltered()
     } catch {
       ElMessage.error('Failed to delete password')
       throw new Error('Failed to delete password')
@@ -339,6 +385,7 @@ export const usePasswordsStore = defineStore('passwords', () => {
     loading,
     syncVersion,
     fetchList,
+    fetchFiltered,
     setSearch,
     setSort,
     setPage,

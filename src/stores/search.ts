@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { search as searchIndex } from '@/crypto/search'
 
 export interface SearchResult {
   itemId: string
@@ -16,8 +17,12 @@ export const useSearchStore = defineStore('search', () => {
     query.value = _query
     loading.value = true
     try {
-      // IndexedDB search — Phase 2.1.5
-      results.value = []
+      const searchResults = await searchIndex(_query)
+      results.value = searchResults.map((r) => ({
+        itemId: r.itemId,
+        title: '',
+        highlightedFragment: '',
+      }))
     } finally {
       loading.value = false
     }
