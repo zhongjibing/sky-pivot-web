@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { checkSyncVersion, pullSync } from '@/api/sync'
+import { usePasswordsStore } from '@/stores/passwords'
 
 export const useSyncStore = defineStore('sync', () => {
   const version = ref(0)
@@ -9,7 +10,7 @@ export const useSyncStore = defineStore('sync', () => {
   async function checkVersion() {
     try {
       const res = await checkSyncVersion()
-      const newVersion = res.data.version
+      const newVersion: number = (res as any).version ?? (res as any).data?.version ?? 0
       if (newVersion > version.value && version.value > 0) {
         await pullChanges(version.value)
       }
@@ -22,6 +23,8 @@ export const useSyncStore = defineStore('sync', () => {
   async function pullChanges(sinceVersion: number) {
     try {
       await pullSync(sinceVersion)
+      const passwordsStore = usePasswordsStore()
+      await passwordsStore.fetchList()
     } catch {
       // silent
     }

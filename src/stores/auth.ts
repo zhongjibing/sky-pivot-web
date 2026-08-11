@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { CryptoKey } from '@/crypto'
 import { useCryptoStore } from '@/stores/crypto'
 import router from '@/router'
 
