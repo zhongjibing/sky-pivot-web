@@ -193,6 +193,65 @@ describe('useCryptoStore', () => {
     })
   })
 
+  describe('lock/unlock cycle', () => {
+    it('lock is idempotent', () => {
+      const store = useCryptoStore()
+      store.setUnlocked(true)
+      store.setUrkReady(true)
+      store.setDekReady(true)
+
+      store.lock()
+      store.lock()
+
+      expect(store.isUnlocked).toBe(false)
+      expect(store.urkReady).toBe(false)
+      expect(store.dekReady).toBe(false)
+      expect(localStorage.getItem('sky-pivot-locked')).toBe('1')
+    })
+
+    it('lock followed by unlock clears locked flag', async () => {
+      const mockUrk = {} as CryptoKey
+      const mockDek = {} as CryptoKey
+      const { deriveURK } = await import('@/crypto/urk')
+      const { decryptDEK } = await import('@/crypto/vault')
+      const { initRKCache } = await import('@/crypto/rk-cache')
+      const { initSearchIndex } = await import('@/crypto/search')
+
+      vi.mocked(deriveURK).mockResolvedValue(mockUrk)
+      vi.mocked(decryptDEK).mockResolvedValue(mockDek)
+      vi.mocked(initRKCache).mockResolvedValue(undefined)
+      vi.mocked(initSearchIndex).mockResolvedValue(undefined)
+      vi.mocked(getVaultDek).mockResolvedValue({
+        salt: btoa('mock-salt-123456789012'),
+        encryptedDek: btoa('mock-encrypted-dek-data'),
+      } as any)
+
+      const originalExportKey = crypto.subtle.exportKey
+      crypto.subtle.exportKey = vi.fn().mockResolvedValue(new ArrayBuffer(8)) as any
+
+      const store = useCryptoStore()
+      store.lock()
+      expect(store.isUnlocked).toBe(false)
+
+      await store.unlock('password')
+      expect(store.isUnlocked).toBe(true)
+      expect(localStorage.getItem('sky-pivot-locked')).toBeNull()
+
+      crypto.subtle.exportKey = originalExportKey
+    })
+
+    it('lock preserves lock state in localStorage for page reload detection', () => {
+      const store = useCryptoStore()
+      expect(store.isPersistedLocked()).toBe(false)
+
+      store.lock()
+      expect(store.isPersistedLocked()).toBe(true)
+
+      store.destroy()
+      expect(store.isPersistedLocked()).toBe(false)
+    })
+  })
+
   describe('verifyPassword()', () => {
     it('returns true for correct password', async () => {
       const mockUrk = {} as CryptoKey

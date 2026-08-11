@@ -97,7 +97,12 @@ const activeMenu = computed(() => {
   return path
 })
 
-const { start: startIdleDetect, stop: stopIdleDetect } = useIdleDetector(
+const {
+  start: startIdleDetect,
+  stop: stopIdleDetect,
+  isIdle,
+  reset: resetIdleTimer,
+} = useIdleDetector(
   cryptoStore.idleTimeout,
   () => {
     if (cryptoStore.isUnlocked) {
@@ -106,19 +111,52 @@ const { start: startIdleDetect, stop: stopIdleDetect } = useIdleDetector(
   },
 )
 
+let visibilityTimer: ReturnType<typeof setTimeout> | null = null
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    if (isIdle.value && cryptoStore.isUnlocked) {
+      cryptoStore.lock()
+      return
+    }
+    visibilityTimer = setTimeout(() => {
+      if (cryptoStore.isUnlocked) {
+        cryptoStore.lock()
+      }
+    }, 60_000)
+  } else if (document.visibilityState === 'visible') {
+    if (visibilityTimer) {
+      clearTimeout(visibilityTimer)
+      visibilityTimer = null
+    }
+    resetIdleTimer()
+  }
+}
+
 onMounted(() => {
   syncStore.startPolling()
   startIdleDetect()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
   stopIdleDetect()
+  if (visibilityTimer) {
+    clearTimeout(visibilityTimer)
+    visibilityTimer = null
+  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 function handleCommand(command: string) {
   if (command === 'logout') {
     syncStore.stopPolling()
     stopIdleDetect()
+    if (visibilityTimer) {
+      clearTimeout(visibilityTimer)
+      visibilityTimer = null
+    }
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
     cryptoStore.destroy()
     authStore.logout()
   } else if (command === 'about') {
